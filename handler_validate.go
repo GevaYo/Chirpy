@@ -3,10 +3,11 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 )
 
 type validResponse struct {
-	Valid bool `json:"valid"`
+	CleanedBody string `json:"cleaned_body"`
 }
 
 type errorResponse struct {
@@ -30,8 +31,19 @@ func validateChirpHandler(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 400, "chirp is too long", nil)
 		return
 	}
-
+	cleaned := replaceBadWords(ch.Body)
 	respondWithJSON(w, 200, validResponse{
-		Valid: true,
+		CleanedBody: cleaned,
 	})
+}
+
+func replaceBadWords(body string) string {
+	words := strings.Split(body, " ")
+	for i, w := range words {
+		word := strings.ToLower(w)
+		if word == "kerfuffle" || word == "sharbert" || word == "fornax" {
+			words[i] = "****"
+		}
+	}
+	return strings.Join(words, " ")
 }
