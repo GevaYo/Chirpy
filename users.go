@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/GevaYo/Chirpy/internal/auth"
+	"github.com/GevaYo/Chirpy/internal/database"
 	"github.com/google/uuid"
 )
 
@@ -18,7 +20,8 @@ type userResponse struct {
 func (cfg *apiConfig) usersHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	type userReq struct {
-		Email string `json:"email"`
+		Password string `json:"password"`
+		Email    string `json:"email"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -27,7 +30,11 @@ func (cfg *apiConfig) usersHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondWithError(w, 500, "Something went wrong", err)
 	}
-	user, err := cfg.db.CreateUser(r.Context(), userBody.Email)
+	hashedPwd, err := auth.HashPassword(userBody.Password)
+	if err != nil {
+		respondWithError(w, 500, "couldn't hash password", err)
+	}
+	user, err := cfg.db.CreateUser(r.Context(), database.CreateUserParams{Email: userBody.Email, HashedPassword: hashedPwd})
 	if err != nil {
 		respondWithError(w, 500, "failed to create user", err)
 	}
@@ -39,4 +46,36 @@ func (cfg *apiConfig) usersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondWithJSON(w, 201, userResp)
+}
+
+func (cfg *apiConfig) loginHandler(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	type userReq struct {
+		Password string `json:"password"`
+		Email    string `json:"email"`
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	loginBody := userReq{}
+	err := decoder.Decode(&loginBody)
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong", err)
+	}
+	user, err := cfg.db.GetUserByEmail(r.Context(), loginBody.Email)
+	if err != nil {
+		respondWithError(w, 401, "Incorrect email or password", err)
+	}
+	err = auth.CheckPasswordHash(loginBody.Password, user.HashedPassword)
+	if err != nil {
+		respondWithError(w, 401, "Incorrect email or password", err)
+	}
+
+	userResp := userResponse{
+		Id:         user.ID,
+		Created_at: user.CreatedAt,
+		Updated_at: user.UpdatedAt,
+		Email:      user.Email,
+	}
+
+	respondWithJSON(w, 200, userResp)
 }
