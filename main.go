@@ -17,6 +17,7 @@ type apiConfig struct {
 	db             *database.Queries
 	platform       string
 	JWTSecret      string
+	PolkaKey       string
 }
 
 func main() {
@@ -27,6 +28,7 @@ func main() {
 	dbURL := os.Getenv("DB_URL")
 	JWTSecret := os.Getenv("JWT_SECRET")
 	platform := os.Getenv("PLATFORM")
+	polkaKey := os.Getenv("POLKA_KEY")
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Printf("Failed to connect to the DB: %s", err)
@@ -38,6 +40,7 @@ func main() {
 		db:             dbQueries,
 		platform:       platform,
 		JWTSecret:      JWTSecret,
+		PolkaKey:       polkaKey,
 	}
 
 	mux := http.NewServeMux()
@@ -48,9 +51,13 @@ func main() {
 	mux.HandleFunc("POST /api/chirps", apiCfg.validateChirpHandler)
 	mux.HandleFunc("GET /api/chirps", apiCfg.chirpsHandler)
 	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.chirpHandler)
+	mux.HandleFunc("DELETE /api/chirps/{chirpID}", apiCfg.deleteChirpHandler)
 
 	mux.HandleFunc("POST /api/users", apiCfg.usersHandler)
+	mux.HandleFunc("PUT /api/users", apiCfg.updateUsersHandler)
 	mux.HandleFunc("POST /api/login", apiCfg.loginHandler)
+
+	mux.HandleFunc("POST /api/polka/webhooks", apiCfg.webhooksHandler)
 
 	mux.HandleFunc("POST /api/refresh", apiCfg.refreshHandler)
 	mux.HandleFunc("POST /api/revoke", apiCfg.revokeHandler)

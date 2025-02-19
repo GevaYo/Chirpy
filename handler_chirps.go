@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -25,9 +26,35 @@ type errorResponse struct {
 }
 
 func (cfg *apiConfig) chirpsHandler(w http.ResponseWriter, r *http.Request) {
-	records, err := cfg.db.GetAllChirps(r.Context())
-	if err != nil {
-		respondWithError(w, 500, "couldn't fetch chirps", err)
+	authorFilter := r.URL.Query().Get("author_id")
+	sorting := r.URL.Query().Get("sort")
+
+	var (
+		records []database.Chirp
+		err     error
+	)
+
+	if authorFilter != "" {
+		authorId, err := uuid.Parse(authorFilter)
+		if err != nil {
+			respondWithError(w, 400, "invalid user ID", err)
+			return
+		}
+		records, err = cfg.db.GetAllChirpsById(r.Context(), authorId)
+		if err != nil {
+			respondWithError(w, 404, "author ID doesn't exist", err)
+			return
+		}
+
+	} else {
+		records, err = cfg.db.GetAllChirps(r.Context())
+		if err != nil {
+			respondWithError(w, 500, "couldn't fetch chirps", err)
+			return
+		}
+		if sorting == "desc" {
+			sort.Slice(records, func(i, j int) bool { return records[i].CreatedAt.After(records[j].CreatedAt) })
+		}
 	}
 
 	var chirps []chirpResponse
@@ -51,7 +78,7 @@ func (cfg *apiConfig) chirpHandler(w http.ResponseWriter, r *http.Request) {
 
 	record, err := cfg.db.GetChirpByID(r.Context(), parsedChirpId)
 	if err != nil {
-		respondWithError(w, 500, "couldn't fetch chirps", err)
+		respondWithError(w, 404, "chirp not found", err)
 	}
 
 	respondWithJSON(w, 200,
@@ -116,4 +143,39 @@ func replaceBadWords(body string) string {
 		}
 	}
 	return strings.Join(words, " ")
+}
+
+func (cfg *apiConfig) deleteChirpHandler(w http.ResponseWriter, r *http.Request) {
+	parsedChirpId, err := uuid.Parse(r.PathValue("chirpID"))
+	if err != nil {
+		respondWithError(w, 400, "invalid chirp ID", err)
+	}
+
+	bearerToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized", err)
+		return
+	}
+
+	userId, err := auth.ValidateJWT(bearerToken, cfg.JWTSecret)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized", err)
+		return
+	}
+
+	dbChirp, err := cfg.db.GetChirpByID(r.Context(), parsedChirpId)
+	if err != nil {
+		respondWithError(w, 404, "Couldn't get chirp", err)
+		return
+	}
+	if dbChirp.UserID != userId {
+		respondWithError(w, 403, "You can't delete this chirp", err)
+		return
+	}
+	err = cfg.db.DeleteChirp(r.Context(), parsedChirpId)
+	if err != nil {
+		respondWithError(w, 500, "failed to delete chirp", err)
+		return
+	}
+	respondWithJSON(w, 204, nil)
 }

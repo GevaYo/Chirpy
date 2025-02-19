@@ -53,10 +53,11 @@ func (cfg *apiConfig) loginHandler(w http.ResponseWriter, r *http.Request) {
 
 	userResp := response{
 		User: User{
-			Id:         user.ID,
-			Created_at: user.CreatedAt,
-			Updated_at: user.UpdatedAt,
-			Email:      user.Email,
+			Id:          user.ID,
+			Created_at:  user.CreatedAt,
+			Updated_at:  user.UpdatedAt,
+			Email:       user.Email,
+			IsChirpyRed: user.IsChirpyRed,
 		},
 		Token:        JWT,
 		RefreshToken: refreshToken,

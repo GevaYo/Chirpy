@@ -11,5 +11,6 @@ WHERE token=$1;
 UPDATE refresh_tokens
 SET revoked_at = CURRENT_TIMESTAMP,
     updated_at = CURRENT_TIMESTAMP
-WHERE token = $1;
+WHERE token = $1
+AND revoked_at IS NULL AND expires_at > now();
 
