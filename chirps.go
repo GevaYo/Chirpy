@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GevaYo/Chirpy/internal/auth"
 	"github.com/GevaYo/Chirpy/internal/database"
 	"github.com/google/uuid"
 )
@@ -66,15 +67,25 @@ func (cfg *apiConfig) chirpHandler(w http.ResponseWriter, r *http.Request) {
 func (cfg *apiConfig) validateChirpHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	type params struct {
-		Body    string    `json:"body"`
-		User_Id uuid.UUID `json:"user_id"`
+		Body string `json:"body"`
+	}
+	bearerToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized", err)
+		return
 	}
 
+	userId, err := auth.ValidateJWT(bearerToken, cfg.JWTSecret)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized", err)
+		return
+	}
 	decoder := json.NewDecoder(r.Body)
 	ch := params{}
-	err := decoder.Decode(&ch) // Decode the request body
+	err = decoder.Decode(&ch) // Decode the request body
 	if err != nil {
 		respondWithError(w, 500, "Something went wrong", err)
+		return
 	}
 
 	if len(ch.Body) > 140 {
@@ -82,9 +93,10 @@ func (cfg *apiConfig) validateChirpHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	cleaned := replaceBadWords(ch.Body)
-	chirp, err := cfg.db.CreateChirp(context.Background(), database.CreateChirpParams{Body: cleaned, UserID: ch.User_Id})
+	chirp, err := cfg.db.CreateChirp(context.Background(), database.CreateChirpParams{Body: cleaned, UserID: userId})
 	if err != nil {
 		respondWithError(w, 500, "failed to create chirp", err)
+		return
 	}
 	respondWithJSON(w, 201, chirpResponse{
 		Id:        chirp.ID,

@@ -11,10 +11,12 @@ import (
 )
 
 type userResponse struct {
-	Id         uuid.UUID `json:"id"`
-	Created_at time.Time `json:"created_at"`
-	Updated_at time.Time `json:"updated_at"`
-	Email      string    `json:"email"`
+	Id           uuid.UUID `json:"id"`
+	Created_at   time.Time `json:"created_at"`
+	Updated_at   time.Time `json:"updated_at"`
+	Email        string    `json:"email"`
+	Token        string    `json:"token"`
+	RefreshToken string    `json:"refresh_token"`
 }
 
 func (cfg *apiConfig) usersHandler(w http.ResponseWriter, r *http.Request) {
@@ -69,12 +71,29 @@ func (cfg *apiConfig) loginHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondWithError(w, 401, "Incorrect email or password", err)
 	}
+	expiresIn := time.Hour
+
+	JWT, err := auth.MakeJWT(user.ID, cfg.JWTSecret, expiresIn)
+	if err != nil {
+		respondWithError(w, 500, "couldn't create token", err)
+	}
+	refreshToken, err := auth.MakeRefreshToken()
+	if err != nil {
+		respondWithError(w, 500, "couldn't create refresh token", err)
+		return
+	}
+	err = cfg.db.StoreRefreshToken(r.Context(), database.StoreRefreshTokenParams{Token: refreshToken, UserID: user.ID, ExpiresAt: time.Now().Add(60 * 24 * time.Hour)})
+	if err != nil {
+		respondWithError(w, 500, "failed to store refresh token", err)
+	}
 
 	userResp := userResponse{
-		Id:         user.ID,
-		Created_at: user.CreatedAt,
-		Updated_at: user.UpdatedAt,
-		Email:      user.Email,
+		Id:           user.ID,
+		Created_at:   user.CreatedAt,
+		Updated_at:   user.UpdatedAt,
+		Email:        user.Email,
+		Token:        JWT,
+		RefreshToken: refreshToken,
 	}
 
 	respondWithJSON(w, 200, userResp)

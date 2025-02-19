@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"net/http"
 	"testing"
 	"time"
 
@@ -64,5 +65,25 @@ func TestWrongSecretJWT(t *testing.T) {
 	_, err = ValidateJWT(token, wrongSecret)
 	if err == nil {
 		t.Fatal("Expected error when validating JWT with wrong secret, got nil")
+	}
+}
+
+func TestValidBearerToken(t *testing.T) {
+	headers := http.Header{}
+	headers.Set("Authorization", "Bearer this_is_a_token_string")
+
+	_, err := GetBearerToken(headers)
+	if err != nil {
+		t.Fatalf("Error getting the bearer token: %v", err)
+	}
+}
+
+func TestInvalidBearerToken(t *testing.T) {
+	headers := http.Header{}
+	headers.Set("Authorizatio", "")
+
+	_, err := GetBearerToken(headers)
+	if err == nil {
+		t.Fatalf("Error getting the bearer token: %v", err)
 	}
 }
